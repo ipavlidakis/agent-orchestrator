@@ -8,11 +8,7 @@ import {
   buildLifecycleMetadataPatch,
   createInitialCanonicalLifecycle,
 } from "../../lifecycle-state.js";
-import {
-  writeMetadata,
-  readMetadata,
-  readMetadataRaw,
-} from "../../metadata.js";
+import { writeMetadata, readMetadata, readMetadataRaw } from "../../metadata.js";
 import { getProjectWorktreesDir } from "../../paths.js";
 import type {
   OrchestratorConfig,
@@ -1231,6 +1227,128 @@ describe("spawn", () => {
     expect(systemPrompt).toContain("Work on issue #INT-1343");
   });
 
+  it("uses pickup-agent label to select role model config", async () => {
+    const projectConfig = config.projects["my-app"];
+    if (!projectConfig) throw new Error("test setup: my-app missing");
+    const configWithRoleModels: OrchestratorConfig = {
+      ...config,
+      projects: {
+        ...config.projects,
+        "my-app": {
+          ...projectConfig,
+          agentConfig: {
+            roleModels: {
+              planner: { model: "planner-model", reasoningEffort: "high" },
+              worker: { model: "worker-model", reasoningEffort: "medium" },
+              reviewer: { model: "reviewer-model", reasoningEffort: "high" },
+            },
+          },
+          worker: {
+            agentConfig: {
+              model: "normal-worker-model",
+              reasoningEffort: "low",
+            },
+          },
+        },
+      },
+    };
+    const mockTracker: Tracker = {
+      name: "mock-tracker",
+      getIssue: vi.fn().mockResolvedValue({
+        id: "INT-1343",
+        title: "Test issue",
+        description: "Test description",
+        url: "https://github.com/org/repo/issues/1343",
+        state: "open",
+        labels: ["ao:auto", "pickup-agent:planner"],
+      }),
+      isCompleted: vi.fn().mockResolvedValue(false),
+      issueUrl: vi.fn().mockReturnValue("https://github.com/org/repo/issues/1343"),
+      branchName: vi.fn().mockReturnValue("feat/INT-1343"),
+      generatePrompt: vi.fn().mockResolvedValue("Issue prompt"),
+    };
+    const registryWithTracker: PluginRegistry = {
+      ...mockRegistry,
+      get: vi.fn().mockImplementation((slot: string) => {
+        if (slot === "runtime") return mockRuntime;
+        if (slot === "agent") return mockAgent;
+        if (slot === "workspace") return mockWorkspace;
+        if (slot === "tracker") return mockTracker;
+        return null;
+      }),
+    };
+
+    const sm = createSessionManager({
+      config: configWithRoleModels,
+      registry: registryWithTracker,
+    });
+    await sm.spawn({ projectId: "my-app", issueId: "INT-1343" });
+
+    expect(mockAgent.getLaunchCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "planner-model", reasoningEffort: "high" }),
+    );
+  });
+
+  it("defaults issue spawns to worker role model when no pickup-agent label exists", async () => {
+    const projectConfig = config.projects["my-app"];
+    if (!projectConfig) throw new Error("test setup: my-app missing");
+    const configWithRoleModels: OrchestratorConfig = {
+      ...config,
+      projects: {
+        ...config.projects,
+        "my-app": {
+          ...projectConfig,
+          agentConfig: {
+            roleModels: {
+              worker: { model: "worker-model", reasoningEffort: "medium" },
+            },
+          },
+          worker: {
+            agentConfig: {
+              model: "normal-worker-model",
+              reasoningEffort: "low",
+            },
+          },
+        },
+      },
+    };
+    const mockTracker: Tracker = {
+      name: "mock-tracker",
+      getIssue: vi.fn().mockResolvedValue({
+        id: "INT-1343",
+        title: "Test issue",
+        description: "Test description",
+        url: "https://github.com/org/repo/issues/1343",
+        state: "open",
+        labels: ["ao:auto"],
+      }),
+      isCompleted: vi.fn().mockResolvedValue(false),
+      issueUrl: vi.fn().mockReturnValue("https://github.com/org/repo/issues/1343"),
+      branchName: vi.fn().mockReturnValue("feat/INT-1343"),
+      generatePrompt: vi.fn().mockResolvedValue("Issue prompt"),
+    };
+    const registryWithTracker: PluginRegistry = {
+      ...mockRegistry,
+      get: vi.fn().mockImplementation((slot: string) => {
+        if (slot === "runtime") return mockRuntime;
+        if (slot === "agent") return mockAgent;
+        if (slot === "workspace") return mockWorkspace;
+        if (slot === "tracker") return mockTracker;
+        return null;
+      }),
+    };
+
+    const sm = createSessionManager({
+      config: configWithRoleModels,
+      registry: registryWithTracker,
+    });
+    await sm.spawn({ projectId: "my-app", issueId: "INT-1343" });
+
+    expect(mockAgent.getLaunchCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "worker-model", reasoningEffort: "medium" }),
+    );
+  });
+
   it("installs workspace hooks before launching the agent", async () => {
     const callOrder: string[] = [];
     const trackingAgent = {
@@ -1274,9 +1392,7 @@ describe("spawn", () => {
       );
       const sm = createSessionManager({ config, registry: mockRegistry });
 
-      await expect(sm.spawn({ projectId: "my-app" })).rejects.toThrow(
-        "workspace creation failed",
-      );
+      await expect(sm.spawn({ projectId: "my-app" })).rejects.toThrow("workspace creation failed");
 
       expect(readMetadataRaw(sessionsDir, "app-1")).toBeNull();
       expect(mockRuntime.create).not.toHaveBeenCalled();
@@ -1299,9 +1415,7 @@ describe("spawn", () => {
       );
       const sm = createSessionManager({ config, registry: mockRegistry });
 
-      await expect(sm.spawn({ projectId: "my-app" })).rejects.toThrow(
-        "runtime creation failed",
-      );
+      await expect(sm.spawn({ projectId: "my-app" })).rejects.toThrow("runtime creation failed");
 
       expect(mockWorkspace.destroy).toHaveBeenCalledWith(worktreePath);
       expect(readMetadataRaw(sessionsDir, "app-1")).toBeNull();
@@ -1386,9 +1500,7 @@ describe("spawn", () => {
       );
       const sm = createSessionManager({ config, registry: mockRegistry });
 
-      await expect(sm.spawn({ projectId: "my-app" })).rejects.toThrow(
-        "runtime creation failed",
-      );
+      await expect(sm.spawn({ projectId: "my-app" })).rejects.toThrow("runtime creation failed");
 
       // Even though workspace.destroy threw, metadata must have been cleaned up.
       expect(readMetadataRaw(sessionsDir, "app-1")).toBeNull();
@@ -1434,8 +1546,7 @@ describe("spawn", () => {
       const sm = createSessionManager({ config, registry: mockRegistry });
       await sm.spawn({
         projectId: "my-app",
-        prompt:
-          "Add rate limiting to /api/upload\n\nUse a sliding-window counter keyed by IP.",
+        prompt: "Add rate limiting to /api/upload\n\nUse a sliding-window counter keyed by IP.",
       });
 
       const meta = readMetadataRaw(sessionsDir, "app-1");
@@ -2485,6 +2596,5 @@ describe("spawn", () => {
 
       expect(session.runtimeHandle).toEqual(makeHandle("rt-1"));
     });
-
   });
 });

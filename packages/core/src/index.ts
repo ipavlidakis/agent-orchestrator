@@ -119,7 +119,12 @@ export {
 // Session manager — session CRUD
 export { createSessionManager } from "./session-manager.js";
 export type { SessionManagerDeps } from "./session-manager.js";
-export { detectPromptRole, resolveAgentSelection, resolveSessionRole } from "./agent-selection.js";
+export {
+  detectPickupAgentRole,
+  detectPromptRole,
+  resolveAgentSelection,
+  resolveSessionRole,
+} from "./agent-selection.js";
 export type { ResolvedAgentSelection, SessionRole } from "./agent-selection.js";
 
 // Process-scoped async memoization — used by plugins to dedupe shared
@@ -179,10 +184,7 @@ export {
   resetOpenCodeSessionListCache,
 } from "./opencode-shared.js";
 export type { OpenCodeSessionListEntry } from "./opencode-shared.js";
-export {
-  getWorkspaceAgentsMdPath,
-  writeWorkspaceOpenCodeAgentsMd,
-} from "./opencode-agents-md.js";
+export { getWorkspaceAgentsMdPath, writeWorkspaceOpenCodeAgentsMd } from "./opencode-agents-md.js";
 export { writeOpenCodeConfig } from "./opencode-config.js";
 export {
   getOrchestratorSessionId,

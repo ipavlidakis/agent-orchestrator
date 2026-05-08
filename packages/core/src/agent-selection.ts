@@ -22,12 +22,21 @@ export interface ResolvedAgentSelection {
 }
 
 const PROMPT_ROLE_PATTERN = /^\s*Role:\s*(Planner|Worker|Reviewer)\s*$/im;
+const PICKUP_AGENT_LABEL_PATTERN = /^pickup-agent:(planner|worker|reviewer)$/i;
 
 export function detectPromptRole(prompt: string | undefined): PromptRole | undefined {
   if (!prompt) return undefined;
   const match = prompt.match(PROMPT_ROLE_PATTERN);
   if (!match) return undefined;
   return match[1].toLowerCase() as PromptRole;
+}
+
+export function detectPickupAgentRole(labels: string[] | undefined): PromptRole | undefined {
+  for (const label of labels ?? []) {
+    const match = label.trim().match(PICKUP_AGENT_LABEL_PATTERN);
+    if (match) return match[1].toLowerCase() as PromptRole;
+  }
+  return undefined;
 }
 
 function pickReasoningEffort(
@@ -56,13 +65,27 @@ export function resolveAgentSelection(params: {
   persistedAgent?: string;
   spawnAgentOverride?: string;
   prompt?: string;
+  pickupAgentRole?: PromptRole;
+  defaultPromptRole?: PromptRole;
 }): ResolvedAgentSelection {
-  const { role, project, defaults, persistedAgent, spawnAgentOverride, prompt } = params;
+  const {
+    role,
+    project,
+    defaults,
+    persistedAgent,
+    spawnAgentOverride,
+    prompt,
+    pickupAgentRole,
+    defaultPromptRole,
+  } = params;
   const roleProjectConfig = role === "orchestrator" ? project.orchestrator : project.worker;
   const roleDefaults = role === "orchestrator" ? defaults.orchestrator : defaults.worker;
   const sharedConfig = project.agentConfig ?? {};
   const roleAgentConfig = roleProjectConfig?.agentConfig ?? {};
-  const promptRole = role === "worker" ? detectPromptRole(prompt) : undefined;
+  const promptRole =
+    role === "worker"
+      ? (pickupAgentRole ?? detectPromptRole(prompt) ?? defaultPromptRole)
+      : undefined;
   const promptRoleConfig = promptRole ? sharedConfig.roleModels?.[promptRole] : undefined;
 
   const agentName = persistedAgent

@@ -205,6 +205,13 @@ projects:
 ```
 
 Issue automation only spawns open GitHub issues with the trigger label, skips already spawned issues, and adds the spawned label after a successful session spawn.
+Use an optional `pickup-agent:<role>` label to select the worker role model for auto-spawned or issue-spawned sessions:
+
+- `pickup-agent:planner`
+- `pickup-agent:reviewer`
+- `pickup-agent:worker`
+
+When no `pickup-agent:*` label is present, issue spawns default to the worker role model.
 
 ## Remote Access
 
